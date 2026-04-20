@@ -20,7 +20,7 @@ Deploying the zones in advance lets non-IT staff create DNS records during resou
 
 ## Deployment
 
-Deploy using `New-AzResourceGroupDeployment`, supplying either an existing or new resource group and the template file:
+Deploy using `New-AzResourceGroupDeployment`, supplying an existing resource group and the template file:
 
 ```powershell
 New-AzResourceGroupDeployment `
@@ -39,6 +39,8 @@ New-AzResourceGroupDeployment `
 | `private_dns_resolver_name`                  | Name for the Private DNS Resolver. Follow your environment's naming policy.                                   |
 | `private_dns_resolver_inbound_endpoint_name` | Name for the inbound endpoint. This is an endpoint entry under the resolver, not a standalone resource.       |
 | `hub_vnet_location`                          | Location (region) of the Hub vNET where the inbound endpoint will be placed.                                  |
+
+> **Important:** The `hub_vnet_location` value must use the programmatic name (e.g., `canadacentral`, `eastus`, `westeurope`), not the display name shown in the Portal (e.g., "Canada Central"). For a mapping of Portal names to region codes, see [Azure regions](https://learn.microsoft.com/en-us/azure/reliability/regions-list?tabs=all#azure-regions-list-1).
 
 ### Inbound Endpoint Subnet Requirements
 
