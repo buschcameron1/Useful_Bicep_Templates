@@ -9,7 +9,7 @@ Deploying the zones in advance lets non-IT staff create DNS records during resou
 > **Recommendation:** Place the DNS zones in a dedicated resource group. They are global resources and do not need to share a resource group with the linked vNET.
 
 > [!WARNING]
-> This template deploys a **Private DNS Resolver** with an inbound endpoint. This is a billable resource and costs will be incurred for as long as it remains deployed. Review [Azure Private DNS Resolver pricing](https://azure.microsoft.com/en-us/pricing/details/dns-resolver/) before deploying.
+> This template deploys a **Private DNS Resolver** with an inbound endpoint. This is a billable resource and costs will be incurred for as long as it remains deployed. Review [Azure Private DNS Resolver pricing](https://azure.microsoft.com/en-in/pricing/details/dns) before deploying.
 
 ---
 
