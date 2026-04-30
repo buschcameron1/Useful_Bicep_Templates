@@ -1,0 +1,19 @@
+{
+  "if": {
+    "allOf": [
+      {
+        "field": "type",
+        "equals": "Microsoft.Network/privateDnsZones"
+      },
+      {
+        "not": {
+          "field": "id",
+          "contains": "[concat('/resourceGroups/', parameters('dnsResourceGroupName'), '/')]"
+        }
+      }
+    ]
+  },
+  "then": {
+    "effect": "deny"
+  }
+}

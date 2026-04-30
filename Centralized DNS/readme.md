@@ -1,84 +1,99 @@
-# Centralized DNS — Private DNS Zones & Resolver
+# Centralized DNS
 
 ## Overview
 
-This template deploys centralized private DNS resolution for Azure infrastructure. It creates private DNS zones for all commercially available Azure Private Link domains, links them to a hub vNET, and creates a Private DNS Resolver with an inbound endpoint to allow spoke and on-premises networks to resolve private zone records.
+This folder contains the infrastructure template for a centralized Azure private DNS design.
 
-Deploying the zones in advance lets non-IT staff create DNS records during resource provisioning without needing permission to create Private DNS Zone resources (they only need to update an existing zone). This is achieved by assigning the relevant security group **Private DNS Zone Contributor** rights over the resource group that houses the zones.
+The main template in [dns_zones_and_resolver.bicep](./dns_zones_and_resolver.bicep) deploys:
 
-> **Recommendation:** Place the DNS zones in a dedicated resource group. They are global resources and do not need to share a resource group with the linked vNET.
+- private DNS zones for commercially available Azure Private Link domains
+- links from those zones to a hub virtual network
+- an Azure Private DNS Resolver with an inbound endpoint
+
+This lets spoke networks and on-premises networks resolve private endpoint records through a shared DNS layer rather than duplicating zones across multiple landing zones or subscriptions.
+
+## Why Use This Pattern
+
+Deploying the zones centrally ahead of time gives application and operations teams a controlled place to manage DNS records without giving broad rights to create new Private DNS zones wherever they want.
+
+Recommended operating model:
+
+- host the Private DNS zones in a dedicated resource group
+- delegate record management to the appropriate team, for example with `Private DNS Zone Contributor`
+- keep the resolver in the hub network that can service spoke and hybrid name resolution
+
+> [!TIP]
+> Private DNS zones are global resources. They do not need to live in the same resource group as the hub virtual network.
 
 > [!WARNING]
-> This template deploys a **Private DNS Resolver** with an inbound endpoint. This is a billable resource and costs will be incurred for as long as it remains deployed. Review [Azure Private DNS Resolver pricing](https://azure.microsoft.com/en-in/pricing/details/dns) before deploying.
+> This template deploys an Azure Private DNS Resolver with an inbound endpoint. That resource is billable. Review [Azure Private DNS Resolver pricing](https://azure.microsoft.com/en-in/pricing/details/dns) before deployment.
 
----
+## Related Governance Template
+
+The [AzPolicy/README.md](./AzPolicy/README.md) folder contains a companion governance deployment.
+
+That management-group-scoped policy is intended to support this centralized DNS pattern by denying creation of Azure Private DNS zones outside the approved DNS resource group. Use it when you want to enforce that all Private DNS zones stay in the central DNS landing zone instead of being scattered across application resource groups.
+
+This will also block auto generated DNS zones during resource creation, keeping DNS zones centralized.
 
 ## Prerequisites
 
-- Azure PowerShell module installed
+- Azure PowerShell installed
 - Contributor or equivalent rights over the target resource group
-- A hub vNET with either a dedicated subnet for the DNS resolver inbound endpoint or a subnet between a /24 and /28 where the endpoint can be placed
+- A hub virtual network already in place
+- A subnet for the resolver inbound endpoint that is either dedicated or safely sized for the resolver
 
----
+## Deploy
 
-## Deployment
-
-Deploy using `New-AzResourceGroupDeployment`, supplying an existing resource group and the template file:
+Deploy the template at resource-group scope:
 
 ```powershell
 New-AzResourceGroupDeployment `
-  -ResourceGroupName "<your-resource-group>" `
-  -TemplateFile "dns_zones_and_resolver.bicep"
+  -ResourceGroupName '<your-resource-group>' `
+  -TemplateFile './dns_zones_and_resolver.bicep'
 ```
-
----
 
 ## Parameters
 
-| Parameter                                    | Description                                                                                                   |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `hub_vnet_externalid`                        | Resource ID of the hub vNET. See [Getting the hub vNET Resource ID](#getting-the-hub-vnet-resource-id) below. |
-| `hub_vnet_resolver_subnet`                   | Resource ID of the subnet to host the resolver inbound endpoint.                                              |
-| `private_dns_resolver_name`                  | Name for the Private DNS Resolver. Follow your environment's naming policy.                                   |
-| `private_dns_resolver_inbound_endpoint_name` | Name for the inbound endpoint. This is an endpoint entry under the resolver, not a standalone resource.       |
-| `hub_vnet_location`                          | Location (region) of the Hub vNET where the inbound endpoint will be placed.                                  |
+| Parameter                                    | Description                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `hub_vnet_externalid`                        | Resource ID of the hub virtual network. See [Getting The Hub vNET Resource ID](#getting-the-hub-vnet-resource-id). |
+| `hub_vnet_resolver_subnet`                   | Resource ID of the subnet that will host the resolver inbound endpoint.                                            |
+| `private_dns_resolver_name`                  | Name of the Azure Private DNS Resolver resource.                                                                   |
+| `private_dns_resolver_inbound_endpoint_name` | Name of the inbound endpoint resource under the resolver.                                                          |
+| `hub_vnet_location`                          | Azure region code for the hub virtual network and inbound endpoint deployment.                                     |
 
-> **Important:** The `hub_vnet_location` value must use the programmatic name (e.g., `canadacentral`, `eastus`, `westeurope`), not the display name shown in the Portal (e.g., "Canada Central"). For a mapping of Portal names to region codes, see [Azure regions](https://learn.microsoft.com/en-us/azure/reliability/regions-list?tabs=all#azure-regions-list-1).
+> [!IMPORTANT]
+> `hub_vnet_location` must use the Azure programmatic region name such as `canadacentral`, `eastus`, or `westeurope`, not the display label shown in the portal.
 
-### Inbound Endpoint Subnet Requirements
+## Inbound Endpoint Subnet Requirements
 
 The subnet used for the resolver inbound endpoint must:
 
-- Be between `/28` and `/24` in size
-- Be reachable by all relevant spoke networks
+- be between `/28` and `/24`
+- be reachable by the spoke and hybrid networks that will send DNS queries to it
 
-Consider creating a dedicated subnet if address space allows
+If address space allows, use a dedicated subnet for the resolver.
 
----
+## Getting The Hub vNET Resource ID
 
-## Getting the hub vNET Resource ID
-
-1. Open the hub vNET in the Azure Portal and click **JSON View** in the top-right corner.
+1. Open the hub virtual network in the Azure portal and select **JSON View**.
 
    ![JSON View](JSON%20View.png)
 
-2. Copy the **Resource ID** from the JSON View panel.
+2. Copy the **Resource ID** value.
 
    ![Copy Resource ID](Copy%20Resource%20ID.png)
 
----
-
 ## Post-Deployment Steps
 
-After the zones and resolver are deployed, complete the following:
+After deployment, complete the downstream DNS configuration:
 
-1. **On-premises:** Create conditional forwarding rules that forward the relevant `privatelink.*` zones to the inbound endpoint IP of the Private DNS Resolver.
-2. **Spoke vNETs:** Configure each spoke vNET to use the resolver inbound endpoint IP as its DNS server.
-
----
+1. Configure on-premises DNS conditional forwarders for the relevant `privatelink.*` zones so they point to the resolver inbound endpoint IP.
+2. Configure spoke virtual networks to use the resolver inbound endpoint IP as their DNS server if you want them to resolve through the centralized path.
 
 ## DNS Resolution Architecture
 
-The diagram below shows the flow DNS traffic takes to return private zone records. What makes Azure DNS function differently from standard DNS services is that the origin vnet of the request matters, this is what trips most teams up when deploying. The Azure DNS public server needs to recieve the DNS resolution request from a machine that sits on a vnet with the zones linked. A private resolver (in its most simple form) simply takes inbound DNS requests and forwards them so they appear to come from the vnet where the inbound endpoint sits.
+Azure private DNS behavior depends on where the DNS query originates. For a private zone record to resolve correctly, Azure must see the request as coming from a network context linked to the zone. The inbound endpoint on the Private DNS Resolver gives you a central place to receive DNS queries and forward them through that linked hub network context.
 
 ![DNS Resolution Architecture](DNS%20Resolution.jpg)
